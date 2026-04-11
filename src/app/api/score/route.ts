@@ -3,10 +3,16 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { getScenario } from '@/lib/scenarios'
 import { Message, Score } from '@/types'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-
 export async function POST(req: NextRequest) {
   try {
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      console.error('GEMINI_API_KEY is not set')
+      return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey)
+
     const { messages, scenarioId } = await req.json() as {
       messages: Message[]
       scenarioId: string
@@ -58,6 +64,7 @@ Respond with ONLY valid JSON in this exact format, no other text:
     return NextResponse.json({ score })
   } catch (error) {
     console.error('Score API error:', error)
-    return NextResponse.json({ error: 'Failed to generate score' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Failed to generate score'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

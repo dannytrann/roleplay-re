@@ -3,10 +3,14 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import { getScenario, getPersonality, buildSystemPrompt } from '@/lib/scenarios'
 import { Message, Difficulty } from '@/types'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-
 export async function POST(req: NextRequest) {
   try {
+    const apiKey = process.env.GEMINI_API_KEY
+    if (!apiKey) {
+      console.error('GEMINI_API_KEY is not set')
+      return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
+    }
+
     const { messages, scenarioId, personality, difficulty } = await req.json() as {
       messages: Message[]
       scenarioId: string
@@ -23,6 +27,7 @@ export async function POST(req: NextRequest) {
 
     const systemPrompt = buildSystemPrompt(scenario, personalityObj, difficulty)
 
+    const genAI = new GoogleGenerativeAI(apiKey)
     const model = genAI.getGenerativeModel({
       model: 'gemini-1.5-flash',
       systemInstruction: systemPrompt,
@@ -43,6 +48,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ reply })
   } catch (error) {
     console.error('Chat API error:', error)
-    return NextResponse.json({ error: 'Failed to get response' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Failed to get response'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
