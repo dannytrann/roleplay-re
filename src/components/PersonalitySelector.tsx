@@ -35,6 +35,7 @@ export default function PersonalitySelector({ scenario, onClose }: PersonalitySe
   const [selectedPersonality, setSelectedPersonality] = useState<string>('skeptical')
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('medium')
   const [copied, setCopied] = useState(false)
+  const canShare = typeof navigator !== 'undefined' && !!navigator.share
 
   function handleStart() {
     if (!scenario) return
@@ -57,10 +58,21 @@ ${systemPrompt}
 ---
 When you're ready, start the conversation by saying a brief opening line as ${scenario.clientName}. I'll respond as the agent.`
 
-    navigator.clipboard.writeText(fullPrompt).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2500)
-    })
+    // Mobile: use native share sheet so user can tap directly into Gemini app
+    // Desktop: fall back to clipboard copy
+    if (navigator.share) {
+      navigator.share({
+        title: `RolePlay RE — ${scenario.title}`,
+        text: fullPrompt,
+      }).catch(() => {
+        // User dismissed share sheet — no action needed
+      })
+    } else {
+      navigator.clipboard.writeText(fullPrompt).then(() => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2500)
+      })
+    }
   }
 
   return (
@@ -137,6 +149,13 @@ When you're ready, start the conversation by saying a brief opening line as ${sc
                   </svg>
                   Copied! Paste into Gemini
                 </span>
+              ) : canShare ? (
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                  </svg>
+                  Share to Gemini
+                </span>
               ) : (
                 <span className="flex items-center gap-2">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -148,7 +167,9 @@ When you're ready, start the conversation by saying a brief opening line as ${sc
             </Button>
 
             <p className="text-xs text-center text-gray-400">
-              Paste into gemini.google.com to practice using your own Gemini account
+              {canShare
+                ? 'Tap Share to Gemini → open Gemini Live and paste to start'
+                : 'Paste into gemini.google.com to practice using your own Gemini account'}
             </p>
           </div>
         </div>
