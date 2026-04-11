@@ -3,6 +3,7 @@ export type Scenario = {
   title: string
   clientName: string
   clientRole: string
+  voiceGender: 'male' | 'female'
   description: string
   systemPrompt: string
   scoringCriteria: string[]

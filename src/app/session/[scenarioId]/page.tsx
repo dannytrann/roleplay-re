@@ -89,7 +89,7 @@ export default function SessionPage() {
       setMessages(finalMessages)
 
       if (voiceEnabled) {
-        speak(reply)
+        speak(reply, scenario?.voiceGender ?? 'male')
       }
     } catch {
       setMessages(prev => [
