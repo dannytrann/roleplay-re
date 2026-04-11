@@ -28,7 +28,7 @@ export function createSpeechRecognition(): SpeechRecognitionInstance | null {
   const SpeechRec = w['SpeechRecognition'] || w['webkitSpeechRecognition']
   if (!SpeechRec) return null
   const recognition = new SpeechRec()
-  recognition.continuous = false
+  recognition.continuous = true
   recognition.interimResults = true
   recognition.lang = 'en-US'
   return recognition

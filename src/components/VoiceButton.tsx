@@ -18,6 +18,7 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
   const [supported, setSupported] = useState(true)
   const [interim, setInterim] = useState('')
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
+  const accumulatedRef = useRef<string>('')  // holds all final text while button is held
 
   useEffect(() => {
     setSupported(isSpeechRecognitionSupported())
@@ -27,35 +28,38 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
     const recognition = createSpeechRecognition()
     if (!recognition) return
     recognitionRef.current = recognition
+    accumulatedRef.current = ''
     setListening(true)
     setInterim('')
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let finalText = ''
       let interimText = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript
         if (event.results[i].isFinal) {
-          finalText += transcript
+          accumulatedRef.current += (accumulatedRef.current ? ' ' : '') + transcript.trim()
         } else {
           interimText += transcript
         }
       }
-      if (interimText) setInterim(interimText)
-      if (finalText) {
-        setInterim('')
-        onTranscript(finalText.trim())
-      }
+      // Show live preview: accumulated finals + current interim
+      setInterim((accumulatedRef.current + (interimText ? ' ' + interimText : '')).trim())
     }
 
     recognition.onerror = () => setListening(false)
-    recognition.onend = () => setListening(false)
+    recognition.onend = () => {
+      // Fired when stop() is called — send everything accumulated
+      const full = accumulatedRef.current.trim()
+      if (full) onTranscript(full)
+      setInterim('')
+      setListening(false)
+    }
     recognition.start()
   }
 
   function stopListening() {
     recognitionRef.current?.stop()
-    setListening(false)
+    // onend will fire and send the transcript
   }
 
   if (!supported) {
