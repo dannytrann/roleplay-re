@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Scenario, Personality, Difficulty } from '@/types'
-import { personalities, difficultyDescriptions } from '@/lib/scenarios'
+import { Scenario, Difficulty } from '@/types'
+import { personalities, difficultyDescriptions, getPersonality, buildSystemPrompt } from '@/lib/scenarios'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -34,12 +34,33 @@ export default function PersonalitySelector({ scenario, onClose }: PersonalitySe
   const router = useRouter()
   const [selectedPersonality, setSelectedPersonality] = useState<string>('skeptical')
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('medium')
+  const [copied, setCopied] = useState(false)
 
   function handleStart() {
     if (!scenario) return
     router.push(
       `/session/${scenario.id}?personality=${selectedPersonality}&difficulty=${selectedDifficulty}`
     )
+  }
+
+  function handleCopyForGemini() {
+    if (!scenario) return
+    const personalityObj = getPersonality(selectedPersonality)
+    if (!personalityObj) return
+
+    const systemPrompt = buildSystemPrompt(scenario, personalityObj, selectedDifficulty)
+
+    const fullPrompt = `You are about to do a real estate sales roleplay with me. I am the real estate agent. You will play the role of the client.
+
+${systemPrompt}
+
+---
+When you're ready, start the conversation by saying a brief opening line as ${scenario.clientName}. I'll respond as the agent.`
+
+    navigator.clipboard.writeText(fullPrompt).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    })
   }
 
   return (
@@ -97,9 +118,39 @@ export default function PersonalitySelector({ scenario, onClose }: PersonalitySe
             </p>
           </div>
 
-          <Button onClick={handleStart} className="w-full" size="lg">
-            Start Session
-          </Button>
+          {/* Action buttons */}
+          <div className="space-y-2">
+            <Button onClick={handleStart} className="w-full" size="lg">
+              Start Session
+            </Button>
+
+            <Button
+              onClick={handleCopyForGemini}
+              variant="outline"
+              className="w-full"
+              size="lg"
+            >
+              {copied ? (
+                <span className="flex items-center gap-2 text-green-600">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Copied! Paste into Gemini
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                  Copy Prompt for Gemini
+                </span>
+              )}
+            </Button>
+
+            <p className="text-xs text-center text-gray-400">
+              Paste into gemini.google.com to practice using your own Gemini account
+            </p>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
