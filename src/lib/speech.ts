@@ -17,6 +17,7 @@ export interface SpeechRecognitionInstance {
   lang: string
   start: () => void
   stop: () => void
+  abort: () => void
   onresult: ((event: SpeechRecognitionEvent) => void) | null
   onerror: ((event: unknown) => void) | null
   onend: (() => void) | null

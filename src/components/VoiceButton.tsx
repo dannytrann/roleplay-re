@@ -50,11 +50,13 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
     }
 
     recognition.onerror = () => {
+      recognitionRef.current = null
       setListening(false)
       setInterim('')
     }
 
     recognition.onend = () => {
+      recognitionRef.current = null
       setListening(false)
       setInterim('')
     }
@@ -69,12 +71,15 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
       .join(' ')
       .trim()
 
-    // Send immediately — don't wait for onend
-    if (full) onTranscript(full)
+    // abort() terminates instantly — stop() waits for browser to finalize (causes ~20s delay)
+    recognitionRef.current?.abort()
+    recognitionRef.current = null
 
     setInterim('')
     setListening(false)
-    recognitionRef.current?.stop()
+
+    // Send after aborting so recognition doesn't interfere
+    if (full) onTranscript(full)
   }
 
   if (!supported) {
