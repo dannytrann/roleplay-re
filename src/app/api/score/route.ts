@@ -53,7 +53,7 @@ Respond with ONLY valid JSON in this exact format, no other text:
   "improve": "<one specific improvement area with a concrete actionable suggestion>"
 }`
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
     const result = await model.generateContent(scoringPrompt)
     const text = result.response.text().trim()
 
