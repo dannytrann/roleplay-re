@@ -35,7 +35,6 @@ export default function PersonalitySelector({ scenario, onClose }: PersonalitySe
   const [selectedPersonality, setSelectedPersonality] = useState<string>('skeptical')
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('medium')
   const [copied, setCopied] = useState(false)
-  const canShare = typeof navigator !== 'undefined' && !!navigator.share
 
   function handleStart() {
     if (!scenario) return
@@ -58,34 +57,23 @@ ${systemPrompt}
 ---
 When you're ready, start the conversation by saying a brief opening line as ${scenario.clientName}. I'll respond as the agent.`
 
-    // Mobile: use native share sheet so user can tap directly into Gemini app
-    // Desktop: fall back to clipboard copy
-    if (navigator.share) {
-      navigator.share({
-        title: `RolePlay RE — ${scenario.title}`,
-        text: fullPrompt,
-      }).catch(() => {
-        // User dismissed share sheet — no action needed
-      })
-    } else {
-      navigator.clipboard.writeText(fullPrompt).then(() => {
-        setCopied(true)
-        setTimeout(() => setCopied(false), 2500)
-      })
-    }
+    navigator.clipboard.writeText(fullPrompt).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    })
   }
 
   return (
     <Dialog open={!!scenario} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg">{scenario?.title}</DialogTitle>
+          <DialogTitle className="text-base leading-snug pr-6">{scenario?.title}</DialogTitle>
           <DialogDescription>
             Customize your practice session before starting.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-5 pt-2">
+        <div className="space-y-4 pt-1">
           {/* Personality */}
           <div>
             <p className="text-sm font-semibold mb-2">Client Personality</p>
@@ -94,14 +82,14 @@ When you're ready, start the conversation by saying a brief opening line as ${sc
                 <button
                   key={p.id}
                   onClick={() => setSelectedPersonality(p.id)}
-                  className={`text-left px-3 py-2.5 rounded-lg border-2 transition-all text-sm ${
+                  className={`text-left px-3 py-2.5 rounded-lg border-2 transition-all ${
                     selectedPersonality === p.id
                       ? 'border-blue-500 bg-blue-50'
                       : 'border-gray-200 hover:border-gray-300 bg-white'
                   }`}
                 >
-                  <span className="font-medium">{p.label}</span>
-                  <span className="text-muted-foreground ml-2">— {p.description}</span>
+                  <span className="text-sm font-medium block">{p.label}</span>
+                  <span className="text-xs text-muted-foreground">{p.description}</span>
                 </button>
               ))}
             </div>
@@ -131,7 +119,7 @@ When you're ready, start the conversation by saying a brief opening line as ${sc
           </div>
 
           {/* Action buttons */}
-          <div className="space-y-2">
+          <div className="space-y-2 pb-1">
             <Button onClick={handleStart} className="w-full" size="lg">
               Start Session
             </Button>
@@ -144,21 +132,14 @@ When you're ready, start the conversation by saying a brief opening line as ${sc
             >
               {copied ? (
                 <span className="flex items-center gap-2 text-green-600">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                   Copied! Paste into Gemini
                 </span>
-              ) : canShare ? (
-                <span className="flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                  </svg>
-                  Share to Gemini
-                </span>
               ) : (
                 <span className="flex items-center gap-2">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                   </svg>
                   Copy Prompt for Gemini
@@ -167,9 +148,7 @@ When you're ready, start the conversation by saying a brief opening line as ${sc
             </Button>
 
             <p className="text-xs text-center text-gray-400">
-              {canShare
-                ? 'Tap Share to Gemini → open Gemini Live and paste to start'
-                : 'Paste into gemini.google.com to practice using your own Gemini account'}
+              Paste into gemini.google.com to practice using your own Gemini account
             </p>
           </div>
         </div>
