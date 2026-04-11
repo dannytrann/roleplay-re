@@ -18,7 +18,8 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
   const [supported, setSupported] = useState(true)
   const [interim, setInterim] = useState('')
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
-  const accumulatedRef = useRef<string>('')  // holds all final text while button is held
+  const accumulatedRef = useRef<string>('')  // all finalized text
+  const interimRef = useRef<string>('')      // current unfinalized text
 
   useEffect(() => {
     setSupported(isSpeechRecognitionSupported())
@@ -29,37 +30,51 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
     if (!recognition) return
     recognitionRef.current = recognition
     accumulatedRef.current = ''
+    interimRef.current = ''
     setListening(true)
     setInterim('')
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interimText = ''
+      let currentInterim = ''
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript
         if (event.results[i].isFinal) {
           accumulatedRef.current += (accumulatedRef.current ? ' ' : '') + transcript.trim()
+          interimRef.current = ''
         } else {
-          interimText += transcript
+          currentInterim += transcript
+          interimRef.current = currentInterim
         }
       }
-      // Show live preview: accumulated finals + current interim
-      setInterim((accumulatedRef.current + (interimText ? ' ' + interimText : '')).trim())
+      setInterim((accumulatedRef.current + (currentInterim ? ' ' + currentInterim : '')).trim())
     }
 
-    recognition.onerror = () => setListening(false)
-    recognition.onend = () => {
-      // Fired when stop() is called — send everything accumulated
-      const full = accumulatedRef.current.trim()
-      if (full) onTranscript(full)
-      setInterim('')
+    recognition.onerror = () => {
       setListening(false)
+      setInterim('')
     }
+
+    recognition.onend = () => {
+      setListening(false)
+      setInterim('')
+    }
+
     recognition.start()
   }
 
   function stopListening() {
+    // Combine finalized + any unfinalized interim text
+    const full = [accumulatedRef.current, interimRef.current]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
+
+    // Send immediately — don't wait for onend
+    if (full) onTranscript(full)
+
+    setInterim('')
+    setListening(false)
     recognitionRef.current?.stop()
-    // onend will fire and send the transcript
   }
 
   if (!supported) {
