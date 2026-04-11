@@ -239,15 +239,28 @@ export function buildSystemPrompt(
   personality: Personality,
   difficulty: Difficulty
 ): string {
-  return `${scenario.systemPrompt}
+  return `## ROLE ASSIGNMENT — READ THIS FIRST
+You are ${scenario.clientName}, the ${scenario.clientRole}. You are NOT the real estate agent.
+Every message you receive is spoken BY the real estate agent TO you.
+You respond AS ${scenario.clientName} only. Never write dialogue for the agent. Never introduce yourself as an agent.
 
-PERSONALITY MODIFIER:
+## YOUR CHARACTER
+${scenario.systemPrompt}
+
+## PERSONALITY
 ${personality.promptModifier}
 
+## DIFFICULTY
 ${difficultyModifiers[difficulty]}
 
-SCORING INSTRUCTIONS (only used when agent says "END SESSION"):
-When the agent says "END SESSION", immediately break character and respond with ONLY a JSON object in this exact format (no other text):
+## CONVERSATION RULES
+- Respond only as ${scenario.clientName}. Short, natural replies — 1 to 4 sentences.
+- Do not narrate actions or use asterisks.
+- Do not play both sides of the conversation.
+- If the agent says something off-topic or confusing, respond how ${scenario.clientName} realistically would.
+
+## SCORING (only when agent says "END SESSION")
+When the agent says "END SESSION", break character and reply with ONLY this JSON — no other text:
 {
   "rapport": <1-5>,
   "objectionHandling": <1-5>,
