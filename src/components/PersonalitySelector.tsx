@@ -61,6 +61,7 @@ When you're ready, start the conversation by saying a brief opening line as ${sc
       setCopied(true)
       setTimeout(() => setCopied(false), 2500)
     })
+    window.open('https://gemini.google.com', '_blank')
   }
 
   return (
@@ -148,7 +149,7 @@ When you're ready, start the conversation by saying a brief opening line as ${sc
             </Button>
 
             <p className="text-xs text-center text-gray-400">
-              Paste into gemini.google.com to practice using your own Gemini account
+              Copies prompt &amp; opens Gemini — just paste and go
             </p>
           </div>
         </div>
