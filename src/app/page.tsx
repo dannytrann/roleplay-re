@@ -25,12 +25,12 @@ export default function HomePage() {
         </p>
       </div>
 
-      {/* How it works — single row on desktop, horizontal scroll on mobile */}
-      <div className="flex gap-3 mb-6 overflow-x-auto pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-3">
+      {/* How it works */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
         {steps.map(item => (
           <div
             key={item.step}
-            className="flex-shrink-0 w-52 sm:w-auto bg-white rounded-xl border border-gray-200 p-3 flex gap-3 items-start"
+            className="bg-white rounded-xl border border-gray-200 p-3 flex gap-3 items-start"
           >
             <span className="flex-shrink-0 w-7 h-7 rounded-full bg-blue-600 text-white text-sm font-bold flex items-center justify-center">
               {item.step}
