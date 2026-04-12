@@ -35,6 +35,7 @@ export default function PersonalitySelector({ scenario, onClose }: PersonalitySe
   const [selectedPersonality, setSelectedPersonality] = useState<string>('skeptical')
   const [selectedDifficulty, setSelectedDifficulty] = useState<Difficulty>('medium')
   const [copied, setCopied] = useState(false)
+  const [showOpenLink, setShowOpenLink] = useState(false)
 
   function handleStart() {
     if (!scenario) return
@@ -59,9 +60,9 @@ When you're ready, start the conversation by saying a brief opening line as ${sc
 
     navigator.clipboard.writeText(fullPrompt).then(() => {
       setCopied(true)
-      setTimeout(() => setCopied(false), 2500)
+      setShowOpenLink(true)
+      setTimeout(() => setCopied(false), 3000)
     })
-    window.open('https://gemini.google.com', '_blank')
   }
 
   return (
@@ -136,7 +137,7 @@ When you're ready, start the conversation by saying a brief opening line as ${sc
                   <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
-                  Copied! Paste into Gemini
+                  Prompt Copied!
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
@@ -148,9 +149,24 @@ When you're ready, start the conversation by saying a brief opening line as ${sc
               )}
             </Button>
 
-            <p className="text-xs text-center text-gray-400">
-              Copies prompt &amp; opens Gemini — just paste and go
-            </p>
+            {/* Real <a> tag so iOS Universal Links opens the Gemini app */}
+            {showOpenLink ? (
+              <a
+                href="https://gemini.google.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Open Gemini → paste and go
+              </a>
+            ) : (
+              <p className="text-xs text-center text-gray-400">
+                Copy the prompt, then open Gemini and paste to start
+              </p>
+            )}
           </div>
         </div>
       </DialogContent>
