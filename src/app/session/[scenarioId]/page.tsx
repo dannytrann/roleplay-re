@@ -41,8 +41,8 @@ export default function SessionPage() {
     stopSpeaking()
   }
 
-  // Create and unlock an Audio element during user gesture, then load TTS into it
-  async function speakResponse(audio: HTMLAudioElement, text: string, gender: 'male' | 'female') {
+  // Load TTS into the pre-created Audio element (created during user gesture)
+  async function speakResponse(text: string, gender: 'male' | 'female') {
     const voice = gender === 'female' ? 'nova' : 'onyx'
     try {
       const res = await fetch('/api/tts', {
@@ -53,9 +53,10 @@ export default function SessionPage() {
       if (!res.ok) return
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      audio.src = url
+      const audio = audioRef.current ?? new Audio()
       audioRef.current = audio
-      audio.play()
+      audio.src = url
+      audio.play().catch(() => {})
       audio.onended = () => URL.revokeObjectURL(url)
     } catch {
       // silently fail — text is still shown
@@ -83,9 +84,10 @@ export default function SessionPage() {
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || loading) return
 
-    // Create Audio element NOW during user gesture so iOS allows playback later
+    // Create Audio element during user gesture so iOS allows playback later
+    // Assign to ref immediately — don't call play() yet (no src causes errors on some browsers)
     const audio = new Audio()
-    audio.play().catch(() => {})
+    audioRef.current = audio
 
     stopAudio()
 
@@ -124,7 +126,7 @@ export default function SessionPage() {
       setMessages(finalMessages)
 
       if (voiceEnabled) {
-        speakResponse(audio, reply, scenario?.voiceGender ?? 'male')
+        speakResponse(reply, scenario?.voiceGender ?? 'male')
       }
     } catch {
       setMessages(prev => [
