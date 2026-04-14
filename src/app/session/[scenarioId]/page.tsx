@@ -33,6 +33,7 @@ export default function SessionPage() {
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [ttsStatus, setTtsStatus] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle')
   const [ttsError, setTtsError] = useState('')
+  const [kokoroReady, setKokoroReady] = useState(false)
   const audioCtxRef = useRef<AudioContext | null>(null)
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null)
   const kokoroRef = useRef<KokoroTTS | null>(null)
@@ -92,6 +93,25 @@ export default function SessionPage() {
     }, 1000)
     return () => clearInterval(interval)
   }, [startTime])
+
+  // Preload Kokoro model as soon as session page mounts
+  useEffect(() => {
+    let cancelled = false
+    async function preload() {
+      try {
+        const { KokoroTTS: Kokoro } = await import('kokoro-js')
+        const model = await Kokoro.from_pretrained('onnx-community/Kokoro-82M-ONNX', { dtype: 'q8' })
+        if (!cancelled) {
+          kokoroRef.current = model
+          setKokoroReady(true)
+        }
+      } catch {
+        // preload failed — will retry lazily on first message
+      }
+    }
+    preload()
+    return () => { cancelled = true }
+  }, [])
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -273,7 +293,9 @@ export default function SessionPage() {
             <p className="font-semibold text-gray-900">{scenario.clientName}</p>
             <p className="text-sm text-gray-500 mb-3">{scenario.clientRole}</p>
             <p className="text-sm text-gray-600 leading-relaxed">{scenario.description}</p>
-            <p className="text-xs text-gray-400 mt-4">Tap the mic button or type to start the conversation.</p>
+            <p className="text-xs text-gray-400 mt-4">
+              {kokoroReady ? 'Tap the mic button or type to start.' : '⏳ Loading voice model…'}
+            </p>
           </div>
         )}
 
