@@ -1,12 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import {
-  createSpeechRecognition,
-  isSpeechRecognitionSupported,
-  SpeechRecognitionInstance,
-  SpeechRecognitionEvent,
-} from '@/lib/speech'
+import { isSpeechRecognitionSupported } from '@/lib/speech'
 
 interface VoiceButtonProps {
   onTranscript: (text: string) => void
@@ -16,70 +11,76 @@ interface VoiceButtonProps {
 export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps) {
   const [listening, setListening] = useState(false)
   const [supported, setSupported] = useState(true)
-  const [interim, setInterim] = useState('')
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
-  const accumulatedRef = useRef<string>('')  // all finalized text
-  const interimRef = useRef<string>('')      // current unfinalized text
+  const [liveText, setLiveText] = useState('')
+  const recognitionRef = useRef<any>(null)
+  const accumulatedRef = useRef('')
+  const interimRef = useRef('')
 
   useEffect(() => {
     setSupported(isSpeechRecognitionSupported())
   }, [])
 
   function startListening() {
-    const recognition = createSpeechRecognition()
-    if (!recognition) return
+    const w = window as any
+    const SpeechRec = w.SpeechRecognition || w.webkitSpeechRecognition
+    if (!SpeechRec) return
+
+    const recognition = new SpeechRec()
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
     recognitionRef.current = recognition
     accumulatedRef.current = ''
     interimRef.current = ''
-    setListening(true)
-    setInterim('')
+    setLiveText('')
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    recognition.onresult = (e: any) => {
       let currentInterim = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript
-        if (event.results[i].isFinal) {
-          accumulatedRef.current += (accumulatedRef.current ? ' ' : '') + transcript.trim()
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript
+        if (e.results[i].isFinal) {
+          accumulatedRef.current += (accumulatedRef.current ? ' ' : '') + t.trim()
           interimRef.current = ''
         } else {
-          currentInterim += transcript
+          currentInterim += t
           interimRef.current = currentInterim
         }
       }
-      setInterim((accumulatedRef.current + (currentInterim ? ' ' + currentInterim : '')).trim())
+      setLiveText((accumulatedRef.current + (currentInterim ? ' ' + currentInterim : '')).trim())
     }
 
     recognition.onerror = () => {
-      recognitionRef.current = null
       setListening(false)
-      setInterim('')
+      setLiveText('')
+      recognitionRef.current = null
     }
 
     recognition.onend = () => {
-      recognitionRef.current = null
       setListening(false)
-      setInterim('')
+      setLiveText('')
+      recognitionRef.current = null
     }
 
     recognition.start()
+    setListening(true)
   }
 
   function stopListening() {
-    // Combine finalized + any unfinalized interim text
-    const full = [accumulatedRef.current, interimRef.current]
-      .filter(Boolean)
-      .join(' ')
-      .trim()
-
-    // abort() terminates instantly — stop() waits for browser to finalize (causes ~20s delay)
+    const full = [accumulatedRef.current, interimRef.current].filter(Boolean).join(' ').trim()
     recognitionRef.current?.abort()
     recognitionRef.current = null
-
-    setInterim('')
     setListening(false)
-
-    // Send after aborting so recognition doesn't interfere
+    setLiveText('')
     if (full) onTranscript(full)
+  }
+
+  function handleTap() {
+    if (disabled) return
+    if (listening) {
+      stopListening()
+    } else {
+      startListening()
+    }
   }
 
   if (!supported) {
@@ -91,42 +92,35 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
   }
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      {interim && (
-        <p className="text-xs text-gray-500 italic max-w-xs text-center truncate">
-          &ldquo;{interim}&rdquo;
+    <div className="flex flex-col items-center gap-1">
+      {liveText ? (
+        <p className="text-xs text-gray-500 italic max-w-[200px] text-center line-clamp-2">
+          &ldquo;{liveText}&rdquo;
+        </p>
+      ) : (
+        <p className="text-xs text-gray-400">
+          {listening ? 'Tap to send' : 'Tap to talk'}
         </p>
       )}
       <button
-        onMouseDown={startListening}
-        onMouseUp={stopListening}
-        onTouchStart={startListening}
-        onTouchEnd={stopListening}
+        onClick={handleTap}
         disabled={disabled}
-        className={`w-16 h-16 rounded-full flex items-center justify-center transition-all select-none ${
+        className={`w-16 h-16 rounded-full flex items-center justify-center transition-all select-none touch-manipulation ${
           listening
             ? 'bg-red-500 scale-110 shadow-lg shadow-red-200 animate-pulse'
             : disabled
             ? 'bg-gray-200 cursor-not-allowed'
-            : 'bg-blue-600 hover:bg-blue-700 shadow-md hover:shadow-lg active:scale-95'
+            : 'bg-blue-600 hover:bg-blue-700 shadow-md active:scale-95'
         }`}
-        title={listening ? 'Release to send' : 'Hold to talk'}
       >
-        <svg
-          className="w-7 h-7 text-white"
-          fill="currentColor"
-          viewBox="0 0 24 24"
-        >
+        <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
           {listening ? (
-            <rect x="6" y="6" width="12" height="12" rx="1" />
+            <rect x="6" y="6" width="12" height="12" rx="2" />
           ) : (
             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3zm-1 3a1 1 0 0 1 2 0v8a1 1 0 0 1-2 0V4zm-4 8a5 5 0 0 0 10 0h2a7 7 0 0 1-6 6.93V21h2v2H9v-2h2v-2.07A7 7 0 0 1 5 12H7z" />
           )}
         </svg>
       </button>
-      <p className="text-xs text-gray-400">
-        {listening ? 'Listening… release to send' : 'Hold to talk'}
-      </p>
     </div>
   )
 }
