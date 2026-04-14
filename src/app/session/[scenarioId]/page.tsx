@@ -82,8 +82,14 @@ export default function SessionPage() {
       })
 
       const data = await res.json()
-      const reply = data.reply as string
 
+      if (!res.ok || !data.reply) {
+        const errMsg = data.error ?? `Error ${res.status}`
+        setMessages(prev => [...prev, { role: 'model', content: `[${errMsg}]`, timestamp: new Date().toISOString() }])
+        return
+      }
+
+      const reply = data.reply as string
       const modelMessage: Message = {
         role: 'model',
         content: reply,
@@ -96,10 +102,11 @@ export default function SessionPage() {
       if (voiceEnabled) {
         speak(reply, scenario?.voiceGender ?? 'male')
       }
-    } catch {
+    } catch (err: any) {
+      const msg = err?.message ?? 'Network error'
       setMessages(prev => [
         ...prev,
-        { role: 'model', content: 'Sorry, something went wrong. Please try again.', timestamp: new Date().toISOString() },
+        { role: 'model', content: `[${msg}]`, timestamp: new Date().toISOString() },
       ])
     } finally {
       setLoading(false)
