@@ -30,19 +30,30 @@ export default function SessionPage() {
   const [startTime] = useState(() => Date.now())
   const [elapsed, setElapsed] = useState(0)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
-  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   function stopAudio() {
-    if (audioRef.current) {
-      audioRef.current.pause()
-      audioRef.current.src = ''
-    }
+    try { sourceNodeRef.current?.stop() } catch {}
+    sourceNodeRef.current = null
     stopSpeaking()
   }
 
-  // Load TTS into the pre-created Audio element (created during user gesture)
+  // Unlock Web Audio API during user gesture — must be called synchronously on tap
+  function unlockAudioContext() {
+    const w = window as any
+    const AC = w.AudioContext || w.webkitAudioContext
+    if (!AC) return
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new AC() as AudioContext
+    }
+    void audioCtxRef.current.resume()
+  }
+
   async function speakResponse(text: string, gender: 'male' | 'female') {
+    const ctx = audioCtxRef.current
+    if (!ctx) return
     const voice = gender === 'female' ? 'nova' : 'onyx'
     try {
       const res = await fetch('/api/tts', {
@@ -51,13 +62,14 @@ export default function SessionPage() {
         body: JSON.stringify({ text, voice }),
       })
       if (!res.ok) return
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const audio = audioRef.current ?? new Audio()
-      audioRef.current = audio
-      audio.src = url
-      audio.play().catch(() => {})
-      audio.onended = () => URL.revokeObjectURL(url)
+      const arrayBuffer = await res.arrayBuffer()
+      const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
+      try { sourceNodeRef.current?.stop() } catch {}
+      const source = ctx.createBufferSource()
+      source.buffer = audioBuffer
+      source.connect(ctx.destination)
+      sourceNodeRef.current = source
+      source.start(0)
     } catch {
       // silently fail — text is still shown
     }
@@ -84,11 +96,7 @@ export default function SessionPage() {
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || loading) return
 
-    // Create Audio element during user gesture so iOS allows playback later
-    // Assign to ref immediately — don't call play() yet (no src causes errors on some browsers)
-    const audio = new Audio()
-    audioRef.current = audio
-
+    unlockAudioContext() // must be called synchronously during user tap
     stopAudio()
 
     const userMessage: Message = {
