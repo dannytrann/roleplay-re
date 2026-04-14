@@ -30,6 +30,7 @@ export default function SessionPage() {
   const [startTime] = useState(() => Date.now())
   const [elapsed, setElapsed] = useState(0)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
+  const [ttsStatus, setTtsStatus] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle')
   const audioCtxRef = useRef<AudioContext | null>(null)
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
@@ -53,15 +54,22 @@ export default function SessionPage() {
 
   async function speakResponse(text: string, gender: 'male' | 'female') {
     const ctx = audioCtxRef.current
-    if (!ctx) return
+    if (!ctx) {
+      setTtsStatus('error')
+      return
+    }
     const voice = gender === 'female' ? 'nova' : 'onyx'
+    setTtsStatus('loading')
     try {
       const res = await fetch('/api/tts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, voice }),
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        setTtsStatus('error')
+        return
+      }
       const arrayBuffer = await res.arrayBuffer()
       const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
       try { sourceNodeRef.current?.stop() } catch {}
@@ -69,9 +77,12 @@ export default function SessionPage() {
       source.buffer = audioBuffer
       source.connect(ctx.destination)
       sourceNodeRef.current = source
+      setTtsStatus('playing')
+      source.onended = () => setTtsStatus('idle')
       source.start(0)
-    } catch {
-      // silently fail — text is still shown
+    } catch (err) {
+      console.error('TTS error:', err)
+      setTtsStatus('error')
     }
   }
 
@@ -331,6 +342,11 @@ export default function SessionPage() {
             </svg>
             <span className="text-[10px] font-medium leading-none">{voiceEnabled ? 'ON' : 'OFF'}</span>
           </button>
+          {voiceEnabled && ttsStatus !== 'idle' && (
+            <span className={`text-[10px] font-medium ${ttsStatus === 'error' ? 'text-red-500' : ttsStatus === 'playing' ? 'text-blue-500' : 'text-gray-400'}`}>
+              {ttsStatus === 'loading' ? '⏳' : ttsStatus === 'playing' ? '🔊' : '❌ TTS err'}
+            </span>
+          )}
 
           <VoiceButton onTranscript={sendMessage} disabled={loading} />
 
