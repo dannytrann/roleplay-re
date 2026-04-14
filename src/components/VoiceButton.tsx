@@ -17,6 +17,7 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
   const [listening, setListening] = useState(false)
   const [supported, setSupported] = useState(true)
   const [interim, setInterim] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
 
   useEffect(() => {
@@ -24,8 +25,12 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
   }, [])
 
   function startListening() {
+    setErrorMsg('')
     const recognition = createSpeechRecognition()
-    if (!recognition) return
+    if (!recognition) {
+      setErrorMsg('Speech API not available')
+      return
+    }
     recognitionRef.current = recognition
     setListening(true)
     setInterim('')
@@ -48,7 +53,19 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
       }
     }
 
-    recognition.onerror = () => setListening(false)
+    recognition.onerror = (e: any) => {
+      setListening(false)
+      const code = e?.error ?? 'unknown'
+      if (code === 'service-not-allowed') {
+        setErrorMsg('Enable Dictation: Settings → General → Keyboard → Enable Dictation')
+      } else if (code === 'not-allowed') {
+        setErrorMsg('Mic blocked — check browser permissions')
+      } else if (code === 'no-speech') {
+        setErrorMsg('No speech detected — try again')
+      } else {
+        setErrorMsg(`Error: ${code}`)
+      }
+    }
     recognition.onend = () => setListening(false)
     recognition.start()
   }
@@ -61,16 +78,22 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
   if (!supported) {
     return (
       <p className="text-xs text-gray-400 text-center">
-        Voice not supported in this browser. Use Chrome or Edge.
+        Voice not supported in this browser.
       </p>
     )
   }
 
   return (
     <div className="flex flex-col items-center gap-2">
-      {interim && (
+      {errorMsg ? (
+        <p className="text-xs text-red-500 text-center max-w-[200px]">{errorMsg}</p>
+      ) : interim ? (
         <p className="text-xs text-gray-500 italic max-w-xs text-center truncate">
           &ldquo;{interim}&rdquo;
+        </p>
+      ) : (
+        <p className="text-xs text-gray-400">
+          {listening ? 'Listening… release to send' : 'Hold to talk'}
         </p>
       )}
       <button
@@ -79,7 +102,7 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
         onTouchStart={startListening}
         onTouchEnd={stopListening}
         disabled={disabled}
-        className={`w-16 h-16 rounded-full flex items-center justify-center transition-all select-none ${
+        className={`w-16 h-16 rounded-full flex items-center justify-center transition-all select-none touch-manipulation ${
           listening
             ? 'bg-red-500 scale-110 shadow-lg shadow-red-200 animate-pulse'
             : disabled
@@ -88,11 +111,7 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
         }`}
         title={listening ? 'Release to send' : 'Hold to talk'}
       >
-        <svg
-          className="w-7 h-7 text-white"
-          fill="currentColor"
-          viewBox="0 0 24 24"
-        >
+        <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
           {listening ? (
             <rect x="6" y="6" width="12" height="12" rx="1" />
           ) : (
@@ -100,9 +119,6 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
           )}
         </svg>
       </button>
-      <p className="text-xs text-gray-400">
-        {listening ? 'Listening… release to send' : 'Hold to talk'}
-      </p>
     </div>
   )
 }
