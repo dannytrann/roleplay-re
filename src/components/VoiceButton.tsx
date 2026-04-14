@@ -1,12 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import {
-  createSpeechRecognition,
-  isSpeechRecognitionSupported,
-  SpeechRecognitionInstance,
-  SpeechRecognitionEvent,
-} from '@/lib/speech'
+import { isSpeechRecognitionSupported } from '@/lib/speech'
 
 interface VoiceButtonProps {
   onTranscript: (text: string) => void
@@ -17,71 +12,62 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
   const [listening, setListening] = useState(false)
   const [supported, setSupported] = useState(true)
   const [liveText, setLiveText] = useState('')
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null)
-  const accumulatedRef = useRef('')
-  const interimRef = useRef('')
-  const listeningRef = useRef(false) // track state in callbacks without stale closure
+  const recognitionRef = useRef<any>(null)
+  const manualStopRef = useRef(false)
 
   useEffect(() => {
     setSupported(isSpeechRecognitionSupported())
   }, [])
 
   function startRecording() {
-    const recognition = createSpeechRecognition()
-    if (!recognition) return
+    const w = window as any
+    const SpeechRec = w.SpeechRecognition || w.webkitSpeechRecognition
+    if (!SpeechRec) return
 
-    accumulatedRef.current = ''
-    interimRef.current = ''
-    setLiveText('')
-    listeningRef.current = true
-    setListening(true)
+    const recognition = new SpeechRec()
+    recognition.continuous = false
+    recognition.interimResults = true
+    recognition.lang = 'en-US'
     recognitionRef.current = recognition
+    manualStopRef.current = false
+    setLiveText('')
+    setListening(true)
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
+    let finalTranscript = ''
+
+    recognition.onresult = (e: any) => {
       let interim = ''
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript
-        if (event.results[i].isFinal) {
-          accumulatedRef.current += (accumulatedRef.current ? ' ' : '') + t.trim()
-          interimRef.current = ''
+      finalTranscript = ''
+      for (let i = 0; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          finalTranscript += e.results[i][0].transcript
         } else {
-          interim += t
-          interimRef.current = interim
+          interim += e.results[i][0].transcript
         }
       }
-      setLiveText((accumulatedRef.current + (interim ? ' ' + interim : '')).trim())
-    }
-
-    recognition.onerror = () => {
-      listeningRef.current = false
-      recognitionRef.current = null
-      setListening(false)
-      setLiveText('')
+      setLiveText((finalTranscript || interim).trim())
     }
 
     recognition.onend = () => {
-      // Auto-restart if user hasn't tapped stop yet (handles iOS cutting off after silence)
-      if (listeningRef.current) {
-        try {
-          recognition.start()
-        } catch {
-          listeningRef.current = false
-          setListening(false)
-        }
-      }
+      setListening(false)
+      setLiveText('')
+      recognitionRef.current = null
+      const text = finalTranscript.trim()
+      if (text) onTranscript(text)
+    }
+
+    recognition.onerror = () => {
+      setListening(false)
+      setLiveText('')
+      recognitionRef.current = null
     }
 
     recognition.start()
   }
 
   function stopRecording() {
-    listeningRef.current = false
-    const full = [accumulatedRef.current, interimRef.current].filter(Boolean).join(' ').trim()
-    recognitionRef.current?.abort()
-    recognitionRef.current = null
-    setListening(false)
-    setLiveText('')
-    if (full) onTranscript(full)
+    manualStopRef.current = true
+    recognitionRef.current?.stop()
   }
 
   function handleTap() {
