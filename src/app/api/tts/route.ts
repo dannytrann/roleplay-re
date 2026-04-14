@@ -14,15 +14,20 @@ export async function POST(req: NextRequest) {
 
   const openai = new OpenAI({ apiKey })
 
-  const mp3 = await openai.audio.speech.create({
-    model: 'tts-1',
-    voice: voice ?? 'onyx',
-    input: text,
-  })
+  try {
+    const mp3 = await openai.audio.speech.create({
+      model: 'tts-1',
+      voice: voice ?? 'onyx',
+      input: text,
+    })
 
-  const buffer = Buffer.from(await mp3.arrayBuffer())
-
-  return new Response(buffer, {
-    headers: { 'Content-Type': 'audio/mpeg' },
-  })
+    const buffer = Buffer.from(await mp3.arrayBuffer())
+    return new Response(buffer, {
+      headers: { 'Content-Type': 'audio/mpeg' },
+    })
+  } catch (err: any) {
+    const msg = err?.message ?? String(err)
+    console.error('TTS error:', msg)
+    return Response.json({ error: msg }, { status: 500 })
+  }
 }

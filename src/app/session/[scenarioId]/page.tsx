@@ -31,6 +31,7 @@ export default function SessionPage() {
   const [elapsed, setElapsed] = useState(0)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const [ttsStatus, setTtsStatus] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle')
+  const [ttsError, setTtsError] = useState('')
   const audioCtxRef = useRef<AudioContext | null>(null)
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
@@ -60,6 +61,7 @@ export default function SessionPage() {
     }
     const voice = gender === 'female' ? 'nova' : 'onyx'
     setTtsStatus('loading')
+    setTtsError('')
     try {
       const res = await fetch('/api/tts', {
         method: 'POST',
@@ -67,6 +69,8 @@ export default function SessionPage() {
         body: JSON.stringify({ text, voice }),
       })
       if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setTtsError(data.error ?? `HTTP ${res.status}`)
         setTtsStatus('error')
         return
       }
@@ -80,8 +84,8 @@ export default function SessionPage() {
       setTtsStatus('playing')
       source.onended = () => setTtsStatus('idle')
       source.start(0)
-    } catch (err) {
-      console.error('TTS error:', err)
+    } catch (err: any) {
+      setTtsError(err?.message ?? 'Unknown error')
       setTtsStatus('error')
     }
   }
@@ -343,8 +347,9 @@ export default function SessionPage() {
             <span className="text-[10px] font-medium leading-none">{voiceEnabled ? 'ON' : 'OFF'}</span>
           </button>
           {voiceEnabled && ttsStatus !== 'idle' && (
-            <span className={`text-[10px] font-medium ${ttsStatus === 'error' ? 'text-red-500' : ttsStatus === 'playing' ? 'text-blue-500' : 'text-gray-400'}`}>
-              {ttsStatus === 'loading' ? '⏳' : ttsStatus === 'playing' ? '🔊' : '❌ TTS err'}
+            <span className={`text-[10px] font-medium max-w-[120px] truncate ${ttsStatus === 'error' ? 'text-red-500' : ttsStatus === 'playing' ? 'text-blue-500' : 'text-gray-400'}`}
+              title={ttsError}>
+              {ttsStatus === 'loading' ? '⏳' : ttsStatus === 'playing' ? '🔊' : `❌ ${ttsError}`}
             </span>
           )}
 
