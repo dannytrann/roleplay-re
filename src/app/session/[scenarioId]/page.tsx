@@ -5,6 +5,7 @@ import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { getScenario } from '@/lib/scenarios'
 import { saveSession, generateSessionId } from '@/lib/history'
 import { stopSpeaking } from '@/lib/speech'
+import type { KokoroTTS } from 'kokoro-js'
 import { Message, Score, Difficulty, Session } from '@/types'
 import VoiceButton from '@/components/VoiceButton'
 import ScoreCard from '@/components/ScoreCard'
@@ -34,6 +35,7 @@ export default function SessionPage() {
   const [ttsError, setTtsError] = useState('')
   const audioCtxRef = useRef<AudioContext | null>(null)
   const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null)
+  const kokoroRef = useRef<KokoroTTS | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   function stopAudio() {
@@ -42,7 +44,6 @@ export default function SessionPage() {
     stopSpeaking()
   }
 
-  // Unlock Web Audio API during user gesture — must be called synchronously on tap
   function unlockAudioContext() {
     const w = window as any
     const AC = w.AudioContext || w.webkitAudioContext
@@ -55,27 +56,21 @@ export default function SessionPage() {
 
   async function speakResponse(text: string, gender: 'male' | 'female') {
     const ctx = audioCtxRef.current
-    if (!ctx) {
-      setTtsStatus('error')
-      return
-    }
-    const voice = gender === 'female' ? 'nova' : 'onyx'
+    if (!ctx) return
     setTtsStatus('loading')
     setTtsError('')
     try {
-      const res = await fetch('/api/tts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, voice }),
-      })
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        setTtsError(data.error ?? `HTTP ${res.status}`)
-        setTtsStatus('error')
-        return
+      // Lazy-load Kokoro on first use
+      if (!kokoroRef.current) {
+        const { KokoroTTS: Kokoro } = await import('kokoro-js')
+        kokoroRef.current = await Kokoro.from_pretrained('onnx-community/Kokoro-82M-ONNX', { dtype: 'q8' })
       }
-      const arrayBuffer = await res.arrayBuffer()
-      const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
+      const voice = gender === 'female' ? 'af_sky' : 'am_michael'
+      const result = await kokoroRef.current.generate(text, { voice })
+      const pcm = new Float32Array(result.audio as Float32Array)
+      const sampleRate = result.sampling_rate as number
+      const audioBuffer = ctx.createBuffer(1, pcm.length, sampleRate)
+      audioBuffer.copyToChannel(pcm, 0)
       try { sourceNodeRef.current?.stop() } catch {}
       const source = ctx.createBufferSource()
       source.buffer = audioBuffer
@@ -85,7 +80,7 @@ export default function SessionPage() {
       source.onended = () => setTtsStatus('idle')
       source.start(0)
     } catch (err: any) {
-      setTtsError(err?.message ?? 'Unknown error')
+      setTtsError(err?.message ?? 'Failed')
       setTtsStatus('error')
     }
   }
