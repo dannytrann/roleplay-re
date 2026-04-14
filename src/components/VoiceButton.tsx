@@ -85,7 +85,7 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
   if (!supported) {
     return (
       <p className="text-xs text-gray-400 text-center">
-        Voice not supported in this browser. Use Chrome or Edge.
+        Voice requires Safari on iPhone — Chrome on iOS doesn&apos;t support it.
       </p>
     )
   }
