@@ -4,8 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { getScenario } from '@/lib/scenarios'
 import { saveSession, generateSessionId } from '@/lib/history'
-import { stopSpeaking } from '@/lib/speech'
-import type { KokoroTTS } from 'kokoro-js'
+import { speak, stopSpeaking } from '@/lib/speech'
 import { Message, Score, Difficulty, Session } from '@/types'
 import VoiceButton from '@/components/VoiceButton'
 import ScoreCard from '@/components/ScoreCard'
@@ -31,59 +30,10 @@ export default function SessionPage() {
   const [startTime] = useState(() => Date.now())
   const [elapsed, setElapsed] = useState(0)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
-  const [ttsStatus, setTtsStatus] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle')
-  const [ttsError, setTtsError] = useState('')
-  const [kokoroReady, setKokoroReady] = useState(false)
-  const audioCtxRef = useRef<AudioContext | null>(null)
-  const sourceNodeRef = useRef<AudioBufferSourceNode | null>(null)
-  const kokoroRef = useRef<KokoroTTS | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   function stopAudio() {
-    try { sourceNodeRef.current?.stop() } catch {}
-    sourceNodeRef.current = null
     stopSpeaking()
-  }
-
-  function unlockAudioContext() {
-    const w = window as any
-    const AC = w.AudioContext || w.webkitAudioContext
-    if (!AC) return
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new AC() as AudioContext
-    }
-    void audioCtxRef.current.resume()
-  }
-
-  async function speakResponse(text: string, gender: 'male' | 'female') {
-    const ctx = audioCtxRef.current
-    if (!ctx) return
-    setTtsStatus('loading')
-    setTtsError('')
-    try {
-      // Lazy-load Kokoro on first use
-      if (!kokoroRef.current) {
-        const { KokoroTTS: Kokoro } = await import('kokoro-js')
-        kokoroRef.current = await Kokoro.from_pretrained('onnx-community/Kokoro-82M-ONNX', { dtype: 'q8' })
-      }
-      const voice = gender === 'female' ? 'af_sky' : 'am_michael'
-      const result = await kokoroRef.current.generate(text, { voice })
-      const pcm = new Float32Array(result.audio as Float32Array)
-      const sampleRate = result.sampling_rate as number
-      const audioBuffer = ctx.createBuffer(1, pcm.length, sampleRate)
-      audioBuffer.copyToChannel(pcm, 0)
-      try { sourceNodeRef.current?.stop() } catch {}
-      const source = ctx.createBufferSource()
-      source.buffer = audioBuffer
-      source.connect(ctx.destination)
-      sourceNodeRef.current = source
-      setTtsStatus('playing')
-      source.onended = () => setTtsStatus('idle')
-      source.start(0)
-    } catch (err: any) {
-      setTtsError(err?.message ?? 'Failed')
-      setTtsStatus('error')
-    }
   }
 
   // Timer
@@ -93,25 +43,6 @@ export default function SessionPage() {
     }, 1000)
     return () => clearInterval(interval)
   }, [startTime])
-
-  // Preload Kokoro model as soon as session page mounts
-  useEffect(() => {
-    let cancelled = false
-    async function preload() {
-      try {
-        const { KokoroTTS: Kokoro } = await import('kokoro-js')
-        const model = await Kokoro.from_pretrained('onnx-community/Kokoro-82M-ONNX', { dtype: 'q8' })
-        if (!cancelled) {
-          kokoroRef.current = model
-          setKokoroReady(true)
-        }
-      } catch {
-        // preload failed — will retry lazily on first message
-      }
-    }
-    preload()
-    return () => { cancelled = true }
-  }, [])
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -126,7 +57,6 @@ export default function SessionPage() {
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || loading) return
 
-    unlockAudioContext() // must be called synchronously during user tap
     stopAudio()
 
     const userMessage: Message = {
@@ -164,7 +94,7 @@ export default function SessionPage() {
       setMessages(finalMessages)
 
       if (voiceEnabled) {
-        speakResponse(reply, scenario?.voiceGender ?? 'male')
+        speak(reply, scenario?.voiceGender ?? 'male')
       }
     } catch {
       setMessages(prev => [
@@ -294,7 +224,7 @@ export default function SessionPage() {
             <p className="text-sm text-gray-500 mb-3">{scenario.clientRole}</p>
             <p className="text-sm text-gray-600 leading-relaxed">{scenario.description}</p>
             <p className="text-xs text-gray-400 mt-4">
-              {kokoroReady ? 'Tap the mic button or type to start.' : '⏳ Loading voice model…'}
+              Tap the mic button or type to start.
             </p>
           </div>
         )}
@@ -363,12 +293,6 @@ export default function SessionPage() {
             </svg>
             <span className="text-[10px] font-medium leading-none">{voiceEnabled ? 'ON' : 'OFF'}</span>
           </button>
-          {voiceEnabled && ttsStatus !== 'idle' && (
-            <span className={`text-[10px] font-medium max-w-[120px] truncate ${ttsStatus === 'error' ? 'text-red-500' : ttsStatus === 'playing' ? 'text-blue-500' : 'text-gray-400'}`}
-              title={ttsError}>
-              {ttsStatus === 'loading' ? '⏳' : ttsStatus === 'playing' ? '🔊' : `❌ ${ttsError}`}
-            </span>
-          )}
 
           <VoiceButton onTranscript={sendMessage} disabled={loading} />
 
