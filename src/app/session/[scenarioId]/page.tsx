@@ -30,20 +30,19 @@ export default function SessionPage() {
   const [startTime] = useState(() => Date.now())
   const [elapsed, setElapsed] = useState(0)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
-  const audioUnlockedRef = useRef(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   function stopAudio() {
     if (audioRef.current) {
       audioRef.current.pause()
-      audioRef.current = null
+      audioRef.current.src = ''
     }
     stopSpeaking()
   }
 
-  async function speakResponse(text: string, gender: 'male' | 'female') {
-    stopAudio()
+  // Create and unlock an Audio element during user gesture, then load TTS into it
+  async function speakResponse(audio: HTMLAudioElement, text: string, gender: 'male' | 'female') {
     const voice = gender === 'female' ? 'nova' : 'onyx'
     try {
       const res = await fetch('/api/tts', {
@@ -54,21 +53,13 @@ export default function SessionPage() {
       if (!res.ok) return
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
-      const audio = new Audio(url)
+      audio.src = url
       audioRef.current = audio
       audio.play()
       audio.onended = () => URL.revokeObjectURL(url)
     } catch {
       // silently fail — text is still shown
     }
-  }
-
-  // Unlock iOS audio context on first user interaction
-  function unlockAudio() {
-    if (audioUnlockedRef.current) return
-    audioUnlockedRef.current = true
-    const u = new SpeechSynthesisUtterance('')
-    window.speechSynthesis.speak(u)
   }
 
   // Timer
@@ -91,7 +82,12 @@ export default function SessionPage() {
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || loading) return
-    unlockAudio()
+
+    // Create Audio element NOW during user gesture so iOS allows playback later
+    const audio = new Audio()
+    audio.play().catch(() => {})
+
+    stopAudio()
 
     const userMessage: Message = {
       role: 'user',
@@ -102,7 +98,6 @@ export default function SessionPage() {
     const updatedMessages = [...messages, userMessage]
     setMessages(updatedMessages)
     setLoading(true)
-    stopAudio()
 
     try {
       const res = await fetch('/api/chat', {
@@ -129,7 +124,7 @@ export default function SessionPage() {
       setMessages(finalMessages)
 
       if (voiceEnabled) {
-        speakResponse(reply, scenario?.voiceGender ?? 'male')
+        speakResponse(audio, reply, scenario?.voiceGender ?? 'male')
       }
     } catch {
       setMessages(prev => [
