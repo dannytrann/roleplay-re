@@ -65,9 +65,11 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
         recognitionRef.current = null
         const code = e?.error ?? 'unknown'
         if (code === 'not-allowed') {
-          setErrorMsg('Mic blocked — allow in Settings')
+          setErrorMsg('Mic permission denied — check browser settings')
+        } else if (code === 'service-not-allowed') {
+          setErrorMsg('Enable Dictation: Settings → General → Keyboard → Enable Dictation')
         } else if (code === 'no-speech') {
-          setErrorMsg('No speech detected')
+          setErrorMsg('No speech detected — try again')
         } else if (code === 'network') {
           setErrorMsg('Network error — check connection')
         } else {

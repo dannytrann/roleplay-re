@@ -218,7 +218,7 @@ export default function SessionPage() {
             <p className="font-semibold text-gray-900">{scenario.clientName}</p>
             <p className="text-sm text-gray-500 mb-3">{scenario.clientRole}</p>
             <p className="text-sm text-gray-600 leading-relaxed">{scenario.description}</p>
-            <p className="text-xs text-gray-400 mt-4">Hold the mic button or type to start the conversation.</p>
+            <p className="text-xs text-gray-400 mt-4">Tap the mic button or type to start the conversation.</p>
           </div>
         )}
 
