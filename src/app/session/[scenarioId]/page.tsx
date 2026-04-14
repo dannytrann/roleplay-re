@@ -327,7 +327,7 @@ export default function SessionPage() {
         <ScoreCard
           score={score}
           scenarioTitle={scenario.title}
-          onClose={() => setScore(null)}
+          onClose={() => router.push('/')}
         />
       )}
     </div>

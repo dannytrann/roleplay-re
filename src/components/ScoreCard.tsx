@@ -80,9 +80,9 @@ export default function ScoreCard({ score, scenarioTitle, onClose }: ScoreCardPr
           </div>
 
           <div className="flex gap-2 pt-1">
-            <Button variant="outline" className="flex-1" onClick={onClose}>
-              Review Transcript
-            </Button>
+            <Link href="/history" className="flex-1">
+              <Button variant="outline" className="w-full">Review Transcript</Button>
+            </Link>
             <Link href="/" className="flex-1">
               <Button className="w-full">Practice Again</Button>
             </Link>
