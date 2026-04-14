@@ -12,8 +12,8 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
   const [listening, setListening] = useState(false)
   const [supported, setSupported] = useState(true)
   const [liveText, setLiveText] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
   const recognitionRef = useRef<any>(null)
-  const manualStopRef = useRef(false)
 
   useEffect(() => {
     setSupported(isSpeechRecognitionSupported())
@@ -22,56 +22,74 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
   function startRecording() {
     const w = window as any
     const SpeechRec = w.SpeechRecognition || w.webkitSpeechRecognition
-    if (!SpeechRec) return
+    if (!SpeechRec) {
+      setErrorMsg('Speech API not found')
+      return
+    }
 
-    const recognition = new SpeechRec()
-    recognition.continuous = false
-    recognition.interimResults = true
-    recognition.lang = 'en-US'
-    recognitionRef.current = recognition
-    manualStopRef.current = false
-    setLiveText('')
-    setListening(true)
+    try {
+      const recognition = new SpeechRec()
+      recognition.continuous = false
+      recognition.interimResults = true
+      recognition.lang = 'en-US'
+      recognitionRef.current = recognition
+      setLiveText('')
+      setErrorMsg('')
 
-    let finalTranscript = ''
+      let finalTranscript = ''
 
-    recognition.onresult = (e: any) => {
-      let interim = ''
-      finalTranscript = ''
-      for (let i = 0; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          finalTranscript += e.results[i][0].transcript
+      recognition.onresult = (e: any) => {
+        let interim = ''
+        finalTranscript = ''
+        for (let i = 0; i < e.results.length; i++) {
+          if (e.results[i].isFinal) {
+            finalTranscript += e.results[i][0].transcript
+          } else {
+            interim += e.results[i][0].transcript
+          }
+        }
+        setLiveText((finalTranscript || interim).trim())
+      }
+
+      recognition.onend = () => {
+        setListening(false)
+        setLiveText('')
+        recognitionRef.current = null
+        const text = finalTranscript.trim()
+        if (text) onTranscript(text)
+      }
+
+      recognition.onerror = (e: any) => {
+        setListening(false)
+        setLiveText('')
+        recognitionRef.current = null
+        const code = e?.error ?? 'unknown'
+        if (code === 'not-allowed') {
+          setErrorMsg('Mic blocked — allow in Settings')
+        } else if (code === 'no-speech') {
+          setErrorMsg('No speech detected')
+        } else if (code === 'network') {
+          setErrorMsg('Network error — check connection')
         } else {
-          interim += e.results[i][0].transcript
+          setErrorMsg(`Error: ${code}`)
         }
       }
-      setLiveText((finalTranscript || interim).trim())
-    }
 
-    recognition.onend = () => {
+      recognition.start()
+      setListening(true)
+    } catch (err: any) {
       setListening(false)
-      setLiveText('')
-      recognitionRef.current = null
-      const text = finalTranscript.trim()
-      if (text) onTranscript(text)
+      setErrorMsg(err?.message ?? 'Failed to start')
     }
-
-    recognition.onerror = () => {
-      setListening(false)
-      setLiveText('')
-      recognitionRef.current = null
-    }
-
-    recognition.start()
   }
 
   function stopRecording() {
-    manualStopRef.current = true
     recognitionRef.current?.stop()
   }
 
   function handleTap() {
     if (disabled) return
+    setErrorMsg('')
     if (listening) {
       stopRecording()
     } else {
@@ -82,14 +100,16 @@ export default function VoiceButton({ onTranscript, disabled }: VoiceButtonProps
   if (!supported) {
     return (
       <p className="text-xs text-gray-400 text-center">
-        Voice not supported. Use Chrome or Safari.
+        Voice not supported in this browser.
       </p>
     )
   }
 
   return (
     <div className="flex flex-col items-center gap-1">
-      {liveText ? (
+      {errorMsg ? (
+        <p className="text-xs text-red-500 text-center max-w-[180px]">{errorMsg}</p>
+      ) : liveText ? (
         <p className="text-xs text-gray-500 italic max-w-[200px] text-center line-clamp-2">
           &ldquo;{liveText}&rdquo;
         </p>
