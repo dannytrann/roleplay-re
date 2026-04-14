@@ -30,10 +30,15 @@ export default function SessionPage() {
   const [startTime] = useState(() => Date.now())
   const [elapsed, setElapsed] = useState(0)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
+  const audioUnlockedRef = useRef(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
-  function stopAudio() {
-    stopSpeaking()
+  // Unlock iOS audio context on first user interaction
+  function unlockAudio() {
+    if (audioUnlockedRef.current) return
+    audioUnlockedRef.current = true
+    const u = new SpeechSynthesisUtterance('')
+    window.speechSynthesis.speak(u)
   }
 
   // Timer
@@ -56,8 +61,7 @@ export default function SessionPage() {
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || loading) return
-
-    stopAudio()
+    unlockAudio()
 
     const userMessage: Message = {
       role: 'user',
@@ -68,6 +72,7 @@ export default function SessionPage() {
     const updatedMessages = [...messages, userMessage]
     setMessages(updatedMessages)
     setLoading(true)
+    stopSpeaking()
 
     try {
       const res = await fetch('/api/chat', {
@@ -82,14 +87,8 @@ export default function SessionPage() {
       })
 
       const data = await res.json()
-
-      if (!res.ok || !data.reply) {
-        const errMsg = data.error ?? `Error ${res.status}`
-        setMessages(prev => [...prev, { role: 'model', content: `[${errMsg}]`, timestamp: new Date().toISOString() }])
-        return
-      }
-
       const reply = data.reply as string
+
       const modelMessage: Message = {
         role: 'model',
         content: reply,
@@ -102,11 +101,10 @@ export default function SessionPage() {
       if (voiceEnabled) {
         speak(reply, scenario?.voiceGender ?? 'male')
       }
-    } catch (err: any) {
-      const msg = err?.message ?? 'Network error'
+    } catch {
       setMessages(prev => [
         ...prev,
-        { role: 'model', content: `[${msg}]`, timestamp: new Date().toISOString() },
+        { role: 'model', content: 'Sorry, something went wrong. Please try again.', timestamp: new Date().toISOString() },
       ])
     } finally {
       setLoading(false)
@@ -119,7 +117,7 @@ export default function SessionPage() {
       return
     }
 
-    stopAudio()
+    stopSpeaking()
     setScoring(true)
 
     try {
@@ -230,9 +228,7 @@ export default function SessionPage() {
             <p className="font-semibold text-gray-900">{scenario.clientName}</p>
             <p className="text-sm text-gray-500 mb-3">{scenario.clientRole}</p>
             <p className="text-sm text-gray-600 leading-relaxed">{scenario.description}</p>
-            <p className="text-xs text-gray-400 mt-4">
-              Tap the mic button or type to start.
-            </p>
+            <p className="text-xs text-gray-400 mt-4">Tap the mic button or type to start the conversation.</p>
           </div>
         )}
 
