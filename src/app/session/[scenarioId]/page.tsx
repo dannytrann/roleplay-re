@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { getScenario } from '@/lib/scenarios'
 import { saveSession, generateSessionId } from '@/lib/history'
-import { speak, stopSpeaking } from '@/lib/speech'
+import { stopSpeaking } from '@/lib/speech'
 import { Message, Score, Difficulty, Session } from '@/types'
 import VoiceButton from '@/components/VoiceButton'
 import ScoreCard from '@/components/ScoreCard'
@@ -31,7 +31,37 @@ export default function SessionPage() {
   const [elapsed, setElapsed] = useState(0)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
   const audioUnlockedRef = useRef(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  function stopAudio() {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current = null
+    }
+    stopSpeaking()
+  }
+
+  async function speakResponse(text: string, gender: 'male' | 'female') {
+    stopAudio()
+    const voice = gender === 'female' ? 'nova' : 'onyx'
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, voice }),
+      })
+      if (!res.ok) return
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const audio = new Audio(url)
+      audioRef.current = audio
+      audio.play()
+      audio.onended = () => URL.revokeObjectURL(url)
+    } catch {
+      // silently fail — text is still shown
+    }
+  }
 
   // Unlock iOS audio context on first user interaction
   function unlockAudio() {
@@ -72,7 +102,7 @@ export default function SessionPage() {
     const updatedMessages = [...messages, userMessage]
     setMessages(updatedMessages)
     setLoading(true)
-    stopSpeaking()
+    stopAudio()
 
     try {
       const res = await fetch('/api/chat', {
@@ -99,7 +129,7 @@ export default function SessionPage() {
       setMessages(finalMessages)
 
       if (voiceEnabled) {
-        speak(reply, scenario?.voiceGender ?? 'male')
+        speakResponse(reply, scenario?.voiceGender ?? 'male')
       }
     } catch {
       setMessages(prev => [
@@ -117,7 +147,7 @@ export default function SessionPage() {
       return
     }
 
-    stopSpeaking()
+    stopAudio()
     setScoring(true)
 
     try {
