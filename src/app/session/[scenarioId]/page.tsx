@@ -30,7 +30,16 @@ export default function SessionPage() {
   const [startTime] = useState(() => Date.now())
   const [elapsed, setElapsed] = useState(0)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
+  const audioUnlockedRef = useRef(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  // Unlock iOS audio context on first user interaction
+  function unlockAudio() {
+    if (audioUnlockedRef.current) return
+    audioUnlockedRef.current = true
+    const u = new SpeechSynthesisUtterance('')
+    window.speechSynthesis.speak(u)
+  }
 
   // Timer
   useEffect(() => {
@@ -52,6 +61,7 @@ export default function SessionPage() {
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || loading) return
+    unlockAudio()
 
     const userMessage: Message = {
       role: 'user',
@@ -273,14 +283,18 @@ export default function SessionPage() {
           {/* Voice toggle */}
           <button
             onClick={() => setVoiceEnabled(v => !v)}
-            className={`flex-shrink-0 p-2 rounded-lg transition-colors ${
+            className={`flex-shrink-0 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors ${
               voiceEnabled ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'
             }`}
             title={voiceEnabled ? 'Voice on' : 'Voice off'}
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
+              {voiceEnabled
+                ? <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z" />
+                : <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
+              }
             </svg>
+            <span className="text-[10px] font-medium leading-none">{voiceEnabled ? 'ON' : 'OFF'}</span>
           </button>
 
           <VoiceButton onTranscript={sendMessage} disabled={loading} />
