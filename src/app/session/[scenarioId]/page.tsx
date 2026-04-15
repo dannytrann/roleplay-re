@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { getScenario } from '@/lib/scenarios'
 import { saveSession, generateSessionId } from '@/lib/history'
-import { speak, stopSpeaking, preloadTTS } from '@/lib/speech'
+import { speak, stopSpeaking, preloadTTS, unlockAudio } from '@/lib/speech'
 import { Message, Score, Difficulty, Session } from '@/types'
 import VoiceButton from '@/components/VoiceButton'
 import ScoreCard from '@/components/ScoreCard'
@@ -58,6 +58,7 @@ export default function SessionPage() {
 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || loading) return
+    unlockAudio()
 
     const userMessage: Message = {
       role: 'user',
@@ -163,6 +164,7 @@ export default function SessionPage() {
   function handleTextSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!textInput.trim()) return
+    unlockAudio()
     sendMessage(textInput)
     setTextInput('')
   }
