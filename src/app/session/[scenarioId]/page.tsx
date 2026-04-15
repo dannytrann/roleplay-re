@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { getScenario } from '@/lib/scenarios'
 import { saveSession, generateSessionId } from '@/lib/history'
-import { speak, stopSpeaking, preloadTTS, unlockAudio } from '@/lib/speech'
+import { speak, stopSpeaking, unlockAudio } from '@/lib/speech'
 import { Message, Score, Difficulty, Session } from '@/types'
 import VoiceButton from '@/components/VoiceButton'
 import ScoreCard from '@/components/ScoreCard'
@@ -30,7 +30,6 @@ export default function SessionPage() {
   const [startTime] = useState(() => Date.now())
   const [elapsed, setElapsed] = useState(0)
   const [voiceEnabled, setVoiceEnabled] = useState(true)
-  const [ttsReady, setTtsReady] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
 
   // Timer
@@ -45,11 +44,6 @@ export default function SessionPage() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
-
-  // Preload Kokoro TTS model on mount
-  useEffect(() => {
-    preloadTTS().finally(() => setTtsReady(true))
-  }, [])
 
   // Redirect if scenario not found
   useEffect(() => {
@@ -184,7 +178,7 @@ export default function SessionPage() {
   }
 
   return (
-    <div className="relative flex flex-col h-[calc(100vh-3.5rem)] -mt-8 -mx-4">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] -mt-8 -mx-4">
       {/* Top bar */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -319,17 +313,6 @@ export default function SessionPage() {
           </form>
         </div>
       </div>
-
-      {/* TTS loading overlay */}
-      {!ttsReady && (
-        <div className="absolute inset-0 z-50 bg-white/70 backdrop-blur-sm flex items-center justify-center">
-          <div className="bg-white rounded-2xl shadow-xl px-8 py-6 flex flex-col items-center gap-3">
-            <span className="text-5xl animate-bounce">🎙️</span>
-            <p className="text-sm font-semibold text-gray-800">Loading voice…</p>
-            <p className="text-xs text-gray-400">Downloading AI voice model, one moment ✨</p>
-          </div>
-        </div>
-      )}
 
       {/* Score card modal */}
       {score && (
