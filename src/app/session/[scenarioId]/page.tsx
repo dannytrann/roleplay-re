@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useSearchParams, useRouter } from 'next/navigation'
 import { getScenario } from '@/lib/scenarios'
 import { saveSession, generateSessionId } from '@/lib/history'
-import { speak, stopSpeaking, unlockAudio } from '@/lib/speech'
+import { speakQueued, stopSpeaking, unlockAudio } from '@/lib/speech'
 import { Message, Score, Difficulty, Session } from '@/types'
 import VoiceButton from '@/components/VoiceButton'
 import ScoreCard from '@/components/ScoreCard'
@@ -65,36 +65,54 @@ export default function SessionPage() {
     setLoading(true)
     stopSpeaking()
 
+    // Placeholder model message updated as chunks arrive
+    const modelMessage: Message = { role: 'model', content: '', timestamp: new Date().toISOString() }
+    setMessages([...updatedMessages, modelMessage])
+
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: updatedMessages,
-          scenarioId,
-          personality,
-          difficulty,
-        }),
+        body: JSON.stringify({ messages: updatedMessages, scenarioId, personality, difficulty }),
       })
 
-      const data = await res.json()
-      const reply = data.reply as string
+      if (!res.ok || !res.body) throw new Error('Chat request failed')
 
-      const modelMessage: Message = {
-        role: 'model',
-        content: reply,
-        timestamp: new Date().toISOString(),
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let fullText = ''
+      let pending = '' // text not yet sent to TTS (waiting for sentence boundary)
+      const gender = scenario?.voiceGender ?? 'male'
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value, { stream: true })
+        fullText += chunk
+        pending += chunk
+
+        // Update the message bubble as text streams in
+        setMessages([...updatedMessages, { ...modelMessage, content: fullText }])
+
+        // Queue TTS for each complete sentence as it arrives
+        if (voiceEnabled) {
+          const match = pending.match(/^([\s\S]*[.!?…])\s+([\s\S]*)$/)
+          if (match) {
+            speakQueued(match[1], gender)
+            pending = match[2]
+          }
+        }
       }
 
-      const finalMessages = [...updatedMessages, modelMessage]
-      setMessages(finalMessages)
-
-      if (voiceEnabled) {
-        speak(reply, scenario?.voiceGender ?? 'male')
+      // Speak any trailing text that didn't end with punctuation
+      if (voiceEnabled && pending.trim()) {
+        speakQueued(pending.trim(), gender)
       }
+
+      setMessages([...updatedMessages, { ...modelMessage, content: fullText }])
     } catch {
       setMessages(prev => [
-        ...prev,
+        ...prev.slice(0, -1),
         { role: 'model', content: 'Sorry, something went wrong. Please try again.', timestamp: new Date().toISOString() },
       ])
     } finally {

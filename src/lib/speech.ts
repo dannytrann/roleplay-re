@@ -42,6 +42,28 @@ export function createSpeechRecognition(): SpeechRecognitionInstance | null {
 let audioCtx: AudioContext | null = null
 let currentSource: AudioBufferSourceNode | null = null
 
+// Queue of pre-fetched audio buffers waiting to play in order
+const audioQueue: AudioBuffer[] = []
+let queueRunning = false
+
+async function drainQueue(ctx: AudioContext, onAllDone?: () => void) {
+  if (queueRunning) return
+  queueRunning = true
+  while (audioQueue.length > 0) {
+    const buf = audioQueue.shift()!
+    await new Promise<void>(resolve => {
+      const src = ctx.createBufferSource()
+      src.buffer = buf
+      src.connect(ctx.destination)
+      currentSource = src
+      src.onended = () => { currentSource = null; resolve() }
+      src.start()
+    })
+  }
+  queueRunning = false
+  onAllDone?.()
+}
+
 function getAudioContext(): AudioContext {
   if (!audioCtx) {
     const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
@@ -74,9 +96,17 @@ export function preloadTTS(): Promise<void> {
   return Promise.resolve()
 }
 
-export function speak(text: string, gender: 'male' | 'female' = 'male', onEnd?: () => void): void {
-  if (typeof window === 'undefined') return
-  stopSpeaking()
+// Fetch TTS audio and add to the playback queue.
+// Sentences are fetched in parallel but play in the order they were queued.
+export function speakQueued(text: string, gender: 'male' | 'female' = 'male', onAllDone?: () => void): void {
+  if (typeof window === 'undefined' || !text.trim()) return
+
+  const ctx = getAudioContext()
+
+  // Reserve a slot in the queue immediately so ordering is maintained
+  const slot: { buf: AudioBuffer | null; ready: boolean } = { buf: null, ready: false }
+  const slotIndex = audioQueue.length
+  audioQueue.push(null as unknown as AudioBuffer) // placeholder
 
   ;(async () => {
     const res = await fetch('/api/tts', {
@@ -84,24 +114,29 @@ export function speak(text: string, gender: 'male' | 'female' = 'male', onEnd?: 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, gender }),
     })
-
     if (!res.ok) throw new Error(`TTS API returned ${res.status}`)
-
     const arrayBuffer = await res.arrayBuffer()
-    const ctx = getAudioContext()
     if (ctx.state === 'suspended') await ctx.resume()
+    slot.buf = await ctx.decodeAudioData(arrayBuffer)
+    slot.ready = true
+    audioQueue[slotIndex] = slot.buf
+    drainQueue(ctx, onAllDone)
+  })().catch(err => {
+    // Remove the placeholder on error so the queue doesn't stall
+    audioQueue.splice(slotIndex, 1)
+    console.error('[TTS] speak error:', err)
+  })
+}
 
-    const audioBuffer = await ctx.decodeAudioData(arrayBuffer)
-    const source = ctx.createBufferSource()
-    source.buffer = audioBuffer
-    source.connect(ctx.destination)
-    currentSource = source
-    source.onended = () => { currentSource = null; onEnd?.() }
-    source.start()
-  })().catch(err => console.error('[TTS] speak error:', err))
+// Simple wrapper for one-shot speak (no streaming)
+export function speak(text: string, gender: 'male' | 'female' = 'male', onEnd?: () => void): void {
+  stopSpeaking()
+  speakQueued(text, gender, onEnd)
 }
 
 export function stopSpeaking(): void {
+  audioQueue.length = 0
+  queueRunning = false
   if (currentSource) {
     try { currentSource.stop() } catch { /* already stopped */ }
     currentSource = null
