@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server'
 
+export const maxDuration = 60
+
 const VOICE_MAP = { female: 'af_heart', male: 'am_michael' } as const
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+
+export const maxDuration = 60
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { getScenario, getPersonality, buildSystemPrompt } from '@/lib/scenarios'
 import { Message, Difficulty } from '@/types'
