@@ -35,6 +35,10 @@ export function createSpeechRecognition(): SpeechRecognitionInstance | null {
   return recognition
 }
 
+// ---------------------------------------------------------------------------
+// Kokoro TTS (primary) with speechSynthesis fallback
+// ---------------------------------------------------------------------------
+
 const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX'
 const VOICE_MAP = { female: 'af_heart', male: 'am_michael' } as const
 
@@ -44,22 +48,39 @@ let ttsInstance: any = null
 let loadingPromise: Promise<any> | null = null
 let audioCtx: AudioContext | null = null
 let currentSource: AudioBufferSourceNode | null = null
+let currentUtterance: SpeechSynthesisUtterance | null = null
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getTTS(): Promise<any> {
   if (ttsInstance) return ttsInstance
   if (!loadingPromise) {
-    // Dynamic import keeps kokoro-js out of the SSR bundle entirely
+    console.log('[TTS] Starting Kokoro model download…')
     loadingPromise = import('kokoro-js')
       .then(({ KokoroTTS, env }) => {
-        // Point ONNX Runtime to WASM files served from public/wasm/
-        // (Turbopack doesn't bundle node_modules WASM files automatically)
+        console.log('[TTS] kokoro-js imported, setting WASM paths…')
         env.wasmPaths = '/wasm/'
-        return KokoroTTS.from_pretrained(MODEL_ID, { dtype: 'q8', device: 'wasm' })
+        return KokoroTTS.from_pretrained(MODEL_ID, {
+          dtype: 'q8',
+          device: 'wasm',
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          progress_callback: (p: any) => {
+            if (p.status === 'downloading') {
+              const pct = p.progress ? Math.round(p.progress) : '?'
+              console.log(`[TTS] Downloading model: ${p.file} — ${pct}%`)
+            } else {
+              console.log('[TTS] Model status:', p.status)
+            }
+          },
+        })
       })
-      .then(instance => { ttsInstance = instance; return instance })
+      .then(instance => {
+        console.log('[TTS] Kokoro model ready ✓')
+        ttsInstance = instance
+        return instance
+      })
       .catch(err => {
-        loadingPromise = null // allow retry on next call
+        console.warn('[TTS] Kokoro failed to load, will use speechSynthesis fallback:', err)
+        loadingPromise = null
         throw err
       })
   }
@@ -74,7 +95,6 @@ function getAudioContext(): AudioContext {
   return audioCtx
 }
 
-// Call this during a user gesture (button tap/click) so iOS allows audio playback
 export function unlockAudio(): void {
   if (typeof window === 'undefined') return
   const ctx = getAudioContext()
@@ -82,7 +102,19 @@ export function unlockAudio(): void {
 }
 
 export function preloadTTS(): Promise<void> {
-  return getTTS().then(() => {})
+  return getTTS().then(() => {}).catch(() => {})
+}
+
+function fallbackSpeak(text: string, gender: 'male' | 'female', onEnd?: () => void): void {
+  if (!('speechSynthesis' in window)) return
+  console.log('[TTS] Using speechSynthesis fallback')
+  window.speechSynthesis.cancel()
+  const utterance = new SpeechSynthesisUtterance(text)
+  utterance.lang = 'en-US'
+  utterance.pitch = gender === 'male' ? 0.9 : 1.1
+  utterance.onend = () => { currentUtterance = null; onEnd?.() }
+  currentUtterance = utterance
+  window.speechSynthesis.speak(utterance)
 }
 
 export function speak(text: string, gender: 'male' | 'female' = 'male', onEnd?: () => void): void {
@@ -90,27 +122,39 @@ export function speak(text: string, gender: 'male' | 'female' = 'male', onEnd?: 
   stopSpeaking()
 
   ;(async () => {
-    const tts = await getTTS()
-    const audio = await tts.generate(text, { voice: VOICE_MAP[gender] })
-    const wavBuffer = audio.toWav()
+    try {
+      console.log('[TTS] speak() called, getting TTS instance…')
+      const tts = await getTTS()
+      console.log('[TTS] Generating audio…')
+      const audio = await tts.generate(text, { voice: VOICE_MAP[gender] })
+      const wavBuffer = audio.toWav()
 
-    const ctx = getAudioContext()
-    if (ctx.state === 'suspended') await ctx.resume()
+      const ctx = getAudioContext()
+      if (ctx.state === 'suspended') await ctx.resume()
 
-    const audioBuffer = await ctx.decodeAudioData(wavBuffer)
-    const source = ctx.createBufferSource()
-    source.buffer = audioBuffer
-    source.connect(ctx.destination)
-    currentSource = source
-    source.onended = () => { currentSource = null; onEnd?.() }
-    source.start()
-  })().catch(err => console.error('TTS error:', err))
+      const audioBuffer = await ctx.decodeAudioData(wavBuffer)
+      const source = ctx.createBufferSource()
+      source.buffer = audioBuffer
+      source.connect(ctx.destination)
+      currentSource = source
+      source.onended = () => { currentSource = null; onEnd?.() }
+      source.start()
+      console.log('[TTS] Kokoro audio playing ✓')
+    } catch (err) {
+      console.warn('[TTS] Kokoro speak failed, using fallback:', err)
+      fallbackSpeak(text, gender, onEnd)
+    }
+  })()
 }
 
 export function stopSpeaking(): void {
   if (currentSource) {
     try { currentSource.stop() } catch { /* already stopped */ }
     currentSource = null
+  }
+  if (currentUtterance) {
+    window.speechSynthesis.cancel()
+    currentUtterance = null
   }
 }
 
