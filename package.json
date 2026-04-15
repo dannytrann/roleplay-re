@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "node -e \"const{cpSync,mkdirSync}=require('fs');mkdirSync('public/wasm',{recursive:true});cpSync('node_modules/onnxruntime-web/dist','public/wasm',{recursive:true,filter:s=>s.endsWith('.wasm')||!s.includes('.')})\""
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",
@@ -15,6 +16,7 @@
     "clsx": "^2.1.1",
     "kokoro-js": "^1.2.1",
     "lucide-react": "^1.8.0",
+    "msedge-tts": "^2.0.5",
     "next": "16.2.3",
     "openai": "^6.34.0",
     "react": "19.2.4",

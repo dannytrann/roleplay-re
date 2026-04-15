@@ -51,10 +51,17 @@ async function getTTS(): Promise<any> {
   if (!loadingPromise) {
     // Dynamic import keeps kokoro-js out of the SSR bundle entirely
     loadingPromise = import('kokoro-js')
-      .then(({ KokoroTTS }) =>
-        KokoroTTS.from_pretrained(MODEL_ID, { dtype: 'q8', device: 'wasm' })
-      )
+      .then(({ KokoroTTS, env }) => {
+        // Point ONNX Runtime to WASM files served from public/wasm/
+        // (Turbopack doesn't bundle node_modules WASM files automatically)
+        env.wasmPaths = '/wasm/'
+        return KokoroTTS.from_pretrained(MODEL_ID, { dtype: 'q8', device: 'wasm' })
+      })
       .then(instance => { ttsInstance = instance; return instance })
+      .catch(err => {
+        loadingPromise = null // allow retry on next call
+        throw err
+      })
   }
   return loadingPromise
 }
