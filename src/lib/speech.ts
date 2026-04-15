@@ -35,20 +35,25 @@ export function createSpeechRecognition(): SpeechRecognitionInstance | null {
   return recognition
 }
 
-import { KokoroTTS } from 'kokoro-js'
-
 const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX'
 const VOICE_MAP = { female: 'af_heart', male: 'am_michael' } as const
 
-let ttsInstance: KokoroTTS | null = null
-let loadingPromise: Promise<KokoroTTS> | null = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let ttsInstance: any = null
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let loadingPromise: Promise<any> | null = null
 let audioCtx: AudioContext | null = null
 let currentSource: AudioBufferSourceNode | null = null
 
-async function getTTS(): Promise<KokoroTTS> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function getTTS(): Promise<any> {
   if (ttsInstance) return ttsInstance
   if (!loadingPromise) {
-    loadingPromise = KokoroTTS.from_pretrained(MODEL_ID, { dtype: 'q8', device: 'wasm' })
+    // Dynamic import keeps kokoro-js out of the SSR bundle entirely
+    loadingPromise = import('kokoro-js')
+      .then(({ KokoroTTS }) =>
+        KokoroTTS.from_pretrained(MODEL_ID, { dtype: 'q8', device: 'wasm' })
+      )
       .then(instance => { ttsInstance = instance; return instance })
   }
   return loadingPromise
