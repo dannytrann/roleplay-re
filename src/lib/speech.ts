@@ -50,11 +50,23 @@ function getAudioContext(): AudioContext {
   return audioCtx
 }
 
-// Call during a user gesture so iOS allows audio playback
+// Call during a user gesture so iOS allows audio playback.
+// iOS Safari requires actually scheduling a buffer (not just resume()) to unlock.
 export function unlockAudio(): void {
   if (typeof window === 'undefined') return
   const ctx = getAudioContext()
-  if (ctx.state === 'suspended') ctx.resume()
+  const doUnlock = () => {
+    const silent = ctx.createBuffer(1, 1, 22050)
+    const src = ctx.createBufferSource()
+    src.buffer = silent
+    src.connect(ctx.destination)
+    src.start(0)
+  }
+  if (ctx.state === 'suspended') {
+    ctx.resume().then(doUnlock)
+  } else {
+    doUnlock()
+  }
 }
 
 // No-op: model warms up on the server on first request
