@@ -42,23 +42,31 @@ export function createSpeechRecognition(): SpeechRecognitionInstance | null {
 let audioCtx: AudioContext | null = null
 let currentSource: AudioBufferSourceNode | null = null
 
-// Queue of pre-fetched audio buffers waiting to play in order
-const audioQueue: AudioBuffer[] = []
+// Queue of Promises — each resolves to the decoded AudioBuffer when ready.
+// Drain awaits each promise so it never tries to play a buffer before it exists.
+const audioQueue: Promise<AudioBuffer>[] = []
 let queueRunning = false
 
 async function drainQueue(ctx: AudioContext, onAllDone?: () => void) {
   if (queueRunning) return
   queueRunning = true
   while (audioQueue.length > 0) {
-    const buf = audioQueue.shift()!
-    await new Promise<void>(resolve => {
-      const src = ctx.createBufferSource()
-      src.buffer = buf
-      src.connect(ctx.destination)
-      currentSource = src
-      src.onended = () => { currentSource = null; resolve() }
-      src.start()
-    })
+    const bufPromise = audioQueue.shift()!
+    try {
+      const buf = await bufPromise
+      if (!queueRunning) break // stopSpeaking() was called while we awaited
+      if (ctx.state === 'suspended') await ctx.resume()
+      await new Promise<void>(resolve => {
+        const src = ctx.createBufferSource()
+        src.buffer = buf
+        src.connect(ctx.destination)
+        currentSource = src
+        src.onended = () => { currentSource = null; resolve() }
+        src.start()
+      })
+    } catch {
+      // Skip this sentence if fetch/decode failed and continue with the rest
+    }
   }
   queueRunning = false
   onAllDone?.()
@@ -97,35 +105,25 @@ export function preloadTTS(): Promise<void> {
 }
 
 // Fetch TTS audio and add to the playback queue.
-// Sentences are fetched in parallel but play in the order they were queued.
+// Sentences are fetched in parallel but always play in the order queued.
 export function speakQueued(text: string, gender: 'male' | 'female' = 'male', onAllDone?: () => void): void {
   if (typeof window === 'undefined' || !text.trim()) return
 
   const ctx = getAudioContext()
 
-  // Reserve a slot in the queue immediately so ordering is maintained
-  const slot: { buf: AudioBuffer | null; ready: boolean } = { buf: null, ready: false }
-  const slotIndex = audioQueue.length
-  audioQueue.push(null as unknown as AudioBuffer) // placeholder
-
-  ;(async () => {
-    const res = await fetch('/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, gender }),
-    })
-    if (!res.ok) throw new Error(`TTS API returned ${res.status}`)
-    const arrayBuffer = await res.arrayBuffer()
-    if (ctx.state === 'suspended') await ctx.resume()
-    slot.buf = await ctx.decodeAudioData(arrayBuffer)
-    slot.ready = true
-    audioQueue[slotIndex] = slot.buf
-    drainQueue(ctx, onAllDone)
-  })().catch(err => {
-    // Remove the placeholder on error so the queue doesn't stall
-    audioQueue.splice(slotIndex, 1)
-    console.error('[TTS] speak error:', err)
+  const bufferPromise = fetch('/api/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text, gender }),
   })
+    .then(res => {
+      if (!res.ok) throw new Error(`TTS API returned ${res.status}`)
+      return res.arrayBuffer()
+    })
+    .then(ab => ctx.decodeAudioData(ab))
+
+  audioQueue.push(bufferPromise)
+  drainQueue(ctx, onAllDone)
 }
 
 // Simple wrapper for one-shot speak (no streaming)
